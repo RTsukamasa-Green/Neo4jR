@@ -1,49 +1,52 @@
-#ALL VIBE CODED. PoC ONLY
+# ALL VIBE CODED. PoC ONLY
 
 # Neo4jR
 
-A native [Neo4j](https://neo4j.com/) driver for R that speaks the **Bolt**
-protocol directly — no Python, no `reticulate`, no external runtime. The heavy
-lifting is done by the Rust [`neo4rs`](https://github.com/neo4j-labs/neo4rs)
-crate, wrapped with [`extendr`](https://extendr.github.io/); everything ships
-inside one R package.
+An R package that connects to Neo4j over the Bolt protocol. It wraps the Rust
+[`neo4rs`](https://github.com/neo4j-labs/neo4rs) crate via
+[`extendr`](https://extendr.github.io/); the Rust code is compiled into the
+package, so there is no Python or external runtime dependency. TLS uses
+`rustls` (no system OpenSSL).
 
-## Why this design
+## Installation
 
-Neo4j's officially supported drivers are Java, Python, JavaScript, Go, and
-.NET — none of which are directly wrappable from R via a compiled interface.
-The realistic options for a self-contained R package are:
-
-| Approach | Protocol | Compiled dep | CRAN-friendly |
-|---|---|---|---|
-| `httr2` + Query API | HTTP/JSON | none | easy |
-| **`extendr` + `neo4rs` (this pkg)** | **Bolt** | **Rust (vendored)** | **yes** |
-| `Rcpp` + `libneo4j-omni` | Bolt | C system lib + OpenSSL | harder |
-| hand-rolled Bolt in C++ | Bolt | none | most work |
-
-The old C connector `seabolt` is archived (2021) and not used.
-
-## Usage
+Building from source requires a Rust toolchain (`cargo`, `rustc` >= 1.81).
 
 ```r
-con <- neo4j_connect("neo4j://localhost:7687", user = "neo4j", password = "password",
-                     database = "mydb")   # database is optional; defaults to "neo4j"
+# after editing Rust, regenerate wrappers + docs:
+rextendr::register_extendr(); roxygen2::roxygenise()
+# install:
+R CMD INSTALL .
+```
 
+## Connecting
+
+```r
+con <- neo4j_connect("neo4j://localhost:7687", user = "neo4j",
+                     password = "password", database = "mydb")
+```
+
+`database` is optional and defaults to the server default (`"neo4j"`). The
+connection is lazy: it is established on the first query, not at `neo4j_connect()`.
+
+## Running queries
+
+```r
 cypher(con, "RETURN 1 AS n, 'hi' AS greeting")
 #>   n greeting
 #> 1 1       hi
 ```
 
-`cypher()` returns a `data.frame` by default: one column per returned value,
-one row per record. Scalar columns are simplified to typed atomic vectors
-(integer / double / logical / character); Neo4j lists, maps, nodes,
-relationships and paths become list-columns of structured objects (below).
+`cypher(con, query, parameters = list(), format = "data.frame", summary = FALSE)`
+returns a `data.frame` by default: one column per returned value, one row per
+record. Scalar columns are simplified to typed atomic vectors; Neo4j lists,
+maps, nodes, relationships and paths become list-columns of structured objects.
 
-### Query parameters (always prefer these)
+### Parameters
 
-Pass user-supplied values through `parameters`, never by pasting into the query
-string. Parameters are sent as native Bolt values, so they cannot alter the
-query (no Cypher injection) and the server can reuse the query plan.
+Values passed via `parameters` are sent as native Bolt values, so they are not
+interpolated into the query text (no Cypher injection) and the server can reuse
+the query plan.
 
 ```r
 cypher(con,
@@ -51,32 +54,19 @@ cypher(con,
        parameters = list(min_age = 30))
 ```
 
-Length-1 R vectors become Bolt scalars; longer vectors and nested lists become
-Bolt lists/maps. A value like `"x' RETURN 1 //"` is treated purely as data.
+Length-1 R vectors are sent as Bolt scalars; longer vectors and nested lists
+become Bolt lists/maps.
 
-Labels and relationship types can be parameterized too, via Cypher
+Labels and relationship types can be parameterized with Cypher
 [dynamic labels](https://neo4j.com/docs/cypher-manual/current/clauses/match/#dynamic-match)
-(`$(...)`), so even they need no string interpolation:
+(`$(...)`):
 
 ```r
 cypher(con, "CREATE (n:$($label) {name: $name})",
        parameters = list(label = "Person", name = "Ada"))
-
-cypher(con, "MATCH (n:$($label)) WHERE n.name = $name RETURN n",
-       parameters = list(label = "Person", name = "Ada"))
 ```
 
-### Structured results (nodes, relationships, paths)
-
-Graph values map to classed R objects, so you can navigate them directly:
-
-```r
-df <- cypher(con, "MATCH (p:Person) RETURN p LIMIT 1")
-node <- df$p[[1]]            # a list-column cell
-node$id                      # element id
-node$labels                  # character vector of labels
-node$properties$name         # a named list of properties
-```
+### Data type mapping
 
 | Neo4j value | R representation |
 |---|---|
@@ -88,24 +78,29 @@ node$properties$name         # a named list of properties
 | Path | `list(nodes, relationships)`, class `neo4j_path` |
 | `null` | `NA` |
 
-### Result shape: data frame or nested list
+```r
+df <- cypher(con, "MATCH (p:Person) RETURN p LIMIT 1")
+node <- df$p[[1]]
+node$id
+node$labels
+node$properties$name
+```
 
-`format = "list"` returns a JSON-analogous structure instead of a data frame —
-a list of records, each a named list, with vectors for Neo4j lists and named
-lists for maps:
+### Result shape
+
+`format = "list"` returns a nested structure instead of a data frame: a list of
+records, each a named list, with vectors for Neo4j lists and named lists for
+maps.
 
 ```r
 cypher(con, "MATCH (p:Person) RETURN p.name AS name, p.tags AS tags",
        format = "list")
-#> [[1]]
-#> [[1]]$name  -> "Ada"
-#> [[1]]$tags  -> c("math", "cs")
 ```
 
 ### Query summary
 
-`summary = TRUE` prints a client-side summary; it's also attached to every
-result and retrievable with `neo4j_summary()`:
+`summary = TRUE` prints a summary and attaches it to the result; retrieve it
+with `neo4j_summary()`.
 
 ```r
 df <- cypher(con, "MATCH (n) RETURN n LIMIT 100", summary = TRUE)
@@ -113,66 +108,48 @@ df <- cypher(con, "MATCH (n) RETURN n LIMIT 100", summary = TRUE)
 neo4j_summary(df)$elapsed_ms
 ```
 
-Note: this is a *client-side* summary (records, columns, round-trip time).
-Server-side write counters (nodes created, properties set, ...) are not
-surfaced by `neo4rs` 0.8, so they are not reported — see *Known limitations*.
+The summary is client-side (records, columns, round-trip time). Server-side
+write counters are not reported (see Limitations).
 
 ## Architecture
 
 ```
 R  (neo4j_connect / cypher; neo4j_connection S3 wrapper)
-│   .Call  →  extendr-generated wrappers (R/extendr-wrappers.R)
+│   .Call  ->  extendr-generated wrappers (R/extendr-wrappers.R)
 Rust (src/rust/src/lib.rs)
-├─ Neo4jConnection { graph: neo4rs::Graph, rt: tokio::Runtime }   ← R external pointer
-├─ bolt_connect(): ConfigBuilder(.db) → rt.block_on(Graph::connect(...))
-└─ bolt_run():     rt.block_on(execute → collect rows)
+├─ Neo4jConnection { graph: neo4rs::Graph, rt: tokio::Runtime }   (R external pointer)
+├─ bolt_connect(): ConfigBuilder(.db) -> rt.block_on(Graph::connect(...))
+└─ bolt_run():     rt.block_on(execute -> collect rows)
               └─ get_value()/bolt_to_robj(): type-probe each value into
-                 native R structures (scalars, vectors, nodes, rels, paths)
-                 → returns records + keys + client-side summary
+                 native R structures; returns records + keys + summary
 ```
 
-`neo4rs` is async; we bridge to R's synchronous world by holding one Tokio
-runtime per connection and `block_on`-ing every call.
+`neo4rs` is async; each connection holds one Tokio runtime and calls
+`block_on` per query.
 
-## Building from source
+## CRAN packaging
 
-Requires a Rust toolchain (`cargo`, `rustc` ≥ 1.81).
-
-```r
-# regenerate wrappers + docs after editing Rust:
-rextendr::register_extendr(); roxygen2::roxygenise()
-# install:
-R CMD INSTALL .
-```
-
-## Toward CRAN
-
-CRAN build machines have **no network**, so dependencies must be vendored:
+CRAN build machines have no network access, so dependencies must be vendored:
 
 ```r
 rextendr::vendor_pkgs()   # writes src/rust/vendor.tar.xz + .cargo config
 ```
 
-Then `cargo build --offline` must succeed. Also verify `neo4rs`'s TLS backend
-does not pull `openssl-sys` (prefer a `rustls` feature) to keep the build free
-of system libraries, and watch the vendored tarball size against CRAN limits.
+`cargo build --offline` must then succeed. Watch the vendored tarball size
+against CRAN limits.
 
-## Known limitations
+## Limitations
 
-- **No server-side write counters.** `neo4rs` 0.8 discards the Bolt SUCCESS
-  metadata, so `summary` reports only client-side info (records, columns,
-  round-trip time), not nodes/relationships created or properties set.
-- **Temporal & spatial types are stringified.** Date/Time/DateTime/Duration
-  and Point values currently come back as their debug text, not R
-  `Date`/`POSIXct`/spatial objects.
-- **Column order** follows Bolt's field order, which may differ from the
-  `RETURN` clause order (`neo4rs`'s `Row` doesn't expose the return-order keys).
-  The data is correct; only the column ordering can differ.
+- Server-side write counters (nodes/relationships created, properties set) are
+  not exposed by `neo4rs` 0.8, so `summary` reports client-side info only.
+- Temporal and spatial types (Date/Time/DateTime/Duration, Point) are returned
+  as their debug text, not R date/time/spatial objects.
+- Column order follows Bolt's field order, which may differ from the `RETURN`
+  clause order.
 
 ## Roadmap
 
-- Temporal & spatial Bolt types → R `Date`/`POSIXct`/`units`.
-- Server-side write counters (needs a newer/lower-level Bolt path than
-  `neo4rs` 0.8 exposes).
+- Temporal and spatial types -> R `Date`/`POSIXct`.
+- Server-side write counters.
 - Explicit transactions and multi-database routing.
 - Connection/auth options (encryption, fetch size) via `ConfigBuilder`.
