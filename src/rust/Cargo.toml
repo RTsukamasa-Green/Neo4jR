@@ -1,0 +1,20 @@
+[package]
+name = 'Neo4jR'
+publish = false
+version = '0.1.0'
+edition = '2021'
+rust-version = '1.81'
+
+[lib]
+crate-type = [ 'staticlib' ]
+name = 'Neo4jR'
+
+[dependencies]
+extendr-api = '*'
+neo4rs = '0.8'
+tokio = { version = '1', features = ['rt-multi-thread'] }
+serde_json = { version = '1', features = ['preserve_order'] }
+
+[profile.release]
+lto = true
+codegen-units = 1

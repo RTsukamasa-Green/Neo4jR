@@ -1,0 +1,36 @@
+# --- R session / workspace ---
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# --- R CMD build / check artifacts ---
+/*.tar.gz
+/*.Rcheck/
+*.Rcheck/
+/doc/
+/Meta/
+
+# --- compiled objects (R side) ---
+*.o
+*.so
+*.dll
+*.a
+src/*.o
+src/*.so
+src/*.dll
+
+# --- Rust / extendr build outputs (generated at build time) ---
+target/
+src/rust/target/
+src/rust/vendor/
+src/vendor/
+src/.cargo/
+src/Makevars
+src/Makevars.win
+
+# --- editor / OS cruft ---
+.vscode/
+.idea/
+.DS_Store
