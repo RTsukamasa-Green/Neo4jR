@@ -52,6 +52,13 @@ R CMD INSTALL --build .
 This produces `Neo4jR_<version>.tgz` on macOS or `Neo4jR_<version>.zip` on
 Windows. A binary must be built on its target platform.
 
+The R Windows installer does not add R to `PATH`, so `R CMD` may be unavailable
+in a shell. Building from within R avoids this:
+
+```r
+pkgbuild::build(".", binary = TRUE)
+```
+
 On Windows, R links with the GNU (Rtools) ABI. If the Rust GNU target is not
 already the default toolchain, install it once before building:
 
