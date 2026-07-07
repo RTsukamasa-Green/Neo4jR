@@ -9,16 +9,16 @@ bolt_connect <- function(uri, user, password, database) .Call(wrap__bolt_connect
 
 #' Run a parameterized Cypher statement and collect every row.
 #'
-#' `params_json` is a JSON object of query parameters (`{}` for none); each
-#' top-level key becomes a Cypher `$param`. Values are passed as native Bolt
-#' types, so the query text is never string-interpolated (no injection, and
-#' the server can cache the plan).
+#' `params` is a named R list; each element becomes a Cypher `$param`. Values
+#' are converted straight to native Bolt types (no JSON round-trip), so the
+#' query text is never string-interpolated (no injection, and the server can
+#' cache the plan).
 #'
 #' Returns a named list with `records` (one named list per row, values mapped
 #' to native R structures), `keys` (column names), `count`, and `elapsed_ms`
 #' (client-side round-trip time). The R side shapes `records` into either a
 #' data frame or a nested list.
-bolt_run <- function(conn, cypher, params_json) .Call(wrap__bolt_run, conn, cypher, params_json)
+bolt_run <- function(conn, cypher, params) .Call(wrap__bolt_run, conn, cypher, params)
 
 
 # nolint end

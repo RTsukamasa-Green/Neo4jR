@@ -44,10 +44,10 @@ fn bolt_connect(
 
 /// Run a parameterized Cypher statement and collect every row.
 ///
-/// `params_json` is a JSON object of query parameters (`{}` for none); each
-/// top-level key becomes a Cypher `$param`. Values are passed as native Bolt
-/// types, so the query text is never string-interpolated (no injection, and
-/// the server can cache the plan).
+/// `params` is a named R list; each element becomes a Cypher `$param`. Values
+/// are converted straight to native Bolt types (no JSON round-trip), so the
+/// query text is never string-interpolated (no injection, and the server can
+/// cache the plan).
 ///
 /// Returns a named list with `records` (one named list per row, values mapped
 /// to native R structures), `keys` (column names), `count`, and `elapsed_ms`
@@ -57,15 +57,14 @@ fn bolt_connect(
 fn bolt_run(
     conn: ExternalPtr<Neo4jConnection>,
     cypher: &str,
-    params_json: &str,
+    params: Robj,
 ) -> std::result::Result<Robj, Error> {
-    let params: Value = serde_json::from_str(params_json)
-        .map_err(|e| Error::Other(format!("Invalid parameters: {e}")))?;
-
     let mut q = query(cypher);
-    if let Some(obj) = params.as_object() {
-        for (key, value) in obj {
-            q = q.param(key.as_str(), json_to_bolt(value));
+    if let Some(list) = params.as_list() {
+        for (key, value) in list.iter() {
+            if !key.is_empty() {
+                q = q.param(key, robj_to_bolt(&value));
+            }
         }
     }
 
@@ -334,35 +333,68 @@ fn na() -> Robj {
     none.into_robj()
 }
 
-/// Recursively convert a JSON value into a Bolt parameter value.
+/// Convert an R value into a Bolt parameter value.
 ///
-/// Whole numbers map to Bolt Integer, other numbers to Float, arrays to Bolt
-/// List, and objects to Bolt Map. Values too large for `i64` fall back to
-/// Float. `null` becomes a Bolt Null.
-fn json_to_bolt(value: &Value) -> BoltType {
-    match value {
-        Value::Null => Option::<i64>::None.into(),
-        Value::Bool(b) => (*b).into(),
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                i.into()
-            } else {
-                n.as_f64().unwrap_or(f64::NAN).into()
-            }
-        }
-        Value::String(s) => s.clone().into(),
-        Value::Array(items) => {
-            let list: Vec<BoltType> = items.iter().map(json_to_bolt).collect();
-            list.into()
-        }
-        Value::Object(map) => {
-            let bolt_map: HashMap<String, BoltType> = map
-                .iter()
-                .map(|(k, v)| (k.clone(), json_to_bolt(v)))
-                .collect();
-            bolt_map.into()
-        }
+/// A length-1 atomic vector becomes a Bolt scalar; a longer atomic vector
+/// becomes a Bolt list; a named list becomes a Bolt map and an unnamed list a
+/// Bolt list. `NULL` and `NA` become Bolt Null. This mirrors JSON auto-unboxing
+/// without needing an R JSON library.
+fn robj_to_bolt(x: &Robj) -> BoltType {
+    if x.is_null() {
+        return null_bolt();
     }
+
+    // Lists: named -> map, unnamed -> list.
+    if let Some(list) = x.as_list() {
+        let has_names = x.names().is_some();
+        if has_names {
+            let mut m: HashMap<String, BoltType> = HashMap::with_capacity(list.len());
+            for (key, value) in list.iter() {
+                m.insert(key.to_string(), robj_to_bolt(&value));
+            }
+            return m.into();
+        }
+        let items: Vec<BoltType> = list.values().map(|v| robj_to_bolt(&v)).collect();
+        return items.into();
+    }
+
+    // Atomic vectors -> scalar (length 1) or Bolt list.
+    let items: Vec<BoltType> = match x.rtype() {
+        Rtype::Logicals => x
+            .as_logical_slice()
+            .unwrap()
+            .iter()
+            .map(|b| if b.is_na() { null_bolt() } else { b.is_true().into() })
+            .collect(),
+        Rtype::Integers => x
+            .as_integer_slice()
+            .unwrap()
+            .iter()
+            .map(|&i| if i.is_na() { null_bolt() } else { (i as i64).into() })
+            .collect(),
+        Rtype::Doubles => x
+            .as_real_slice()
+            .unwrap()
+            .iter()
+            .map(|&f| if f.is_na() { null_bolt() } else { f.into() })
+            .collect(),
+        Rtype::Strings => x
+            .as_str_iter()
+            .unwrap()
+            .map(|s| if s.is_na() { null_bolt() } else { s.to_string().into() })
+            .collect(),
+        // Anything else (functions, environments, ...) is not a valid parameter.
+        _ => return null_bolt(),
+    };
+
+    match items.len() {
+        1 => items.into_iter().next().unwrap(),
+        _ => items.into(),
+    }
+}
+
+fn null_bolt() -> BoltType {
+    Option::<i64>::None.into()
 }
 
 // Macro to generate exports.

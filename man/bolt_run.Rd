@@ -4,13 +4,13 @@
 \alias{bolt_run}
 \title{Run a parameterized Cypher statement and collect every row.}
 \usage{
-bolt_run(conn, cypher, params_json)
+bolt_run(conn, cypher, params)
 }
 \description{
-\code{params_json} is a JSON object of query parameters (\code{{}} for none); each
-top-level key becomes a Cypher \verb{$param}. Values are passed as native Bolt
-types, so the query text is never string-interpolated (no injection, and
-the server can cache the plan).
+\code{params} is a named R list; each element becomes a Cypher \verb{$param}. Values
+are converted straight to native Bolt types (no JSON round-trip), so the
+query text is never string-interpolated (no injection, and the server can
+cache the plan).
 }
 \details{
 Returns a named list with \code{records} (one named list per row, values mapped

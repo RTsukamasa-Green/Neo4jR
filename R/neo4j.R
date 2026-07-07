@@ -74,13 +74,8 @@ cypher <- function(con, query, parameters = list(),
   if (length(parameters) > 0L && is.null(names(parameters))) {
     stop("`parameters` must be a named list.", call. = FALSE)
   }
-  params_json <- if (length(parameters) == 0L) {
-    "{}"
-  } else {
-    jsonlite::toJSON(parameters, auto_unbox = TRUE, null = "null", digits = NA)
-  }
 
-  res <- bolt_run(con$handle, query, params_json)
+  res <- bolt_run(con$handle, query, parameters)
   summ <- structure(
     list(records = res$count, columns = res$keys, elapsed_ms = res$elapsed_ms),
     class = "neo4j_summary"
