@@ -10,12 +10,53 @@ package, so there is no Python or external runtime dependency. TLS uses
 
 ## Installation
 
-Building from source requires a Rust toolchain (`cargo`, `rustc` >= 1.81).
+Installing a binary package does not require the Rust toolchain; only building
+a binary or installing from source does.
+
+### Install a binary
+
+From a binary file (`.tgz` on macOS, `.zip` on Windows):
 
 ```r
-# after editing Rust, regenerate wrappers + docs:
-rextendr::register_extendr(); roxygen2::roxygenise()
-# install:
+install.packages("Neo4jR_0.0.0.9000.tgz", repos = NULL)
+remotes::install_local("Neo4jR_0.0.0.9000.tgz")
+devtools::install_local("Neo4jR_0.0.0.9000.tgz")
+```
+
+Each installs the precompiled library without invoking cargo/rustc.
+
+### Internal package repository
+
+Place binaries in a CRAN-style directory and index it (paths use the target R
+version, e.g. 4.4):
+
+```r
+tools::write_PACKAGES("repo/bin/windows/contrib/4.4",             type = "win.binary")
+tools::write_PACKAGES("repo/bin/macosx/big-sur-arm64/contrib/4.4", type = "mac.binary")
+```
+
+Serve the directory over HTTP or a `file://` path:
+
+```r
+install.packages("Neo4jR", repos = "https://internal.example.com/r")
+```
+
+### Build a binary (requires Rust)
+
+On the target OS, with `cargo`/`rustc` >= 1.81:
+
+```sh
+R CMD INSTALL --build .
+# Windows: rustup target add x86_64-pc-windows-gnu
+```
+
+Produces `Neo4jR_<version>.tgz` (macOS) or `.zip` (Windows). A binary must be
+built on its target platform.
+
+### Build from source (requires Rust)
+
+```r
+rextendr::register_extendr(); roxygen2::roxygenise()  # after editing Rust
 R CMD INSTALL .
 ```
 
@@ -135,8 +176,8 @@ CRAN build machines have no network access, so dependencies must be vendored:
 rextendr::vendor_pkgs()   # writes src/rust/vendor.tar.xz + .cargo config
 ```
 
-`cargo build --offline` must then succeed. Watch the vendored tarball size
-against CRAN limits.
+`cargo build --offline` must then succeed. The vendored tarball counts toward
+CRAN package size limits.
 
 ## Limitations
 
