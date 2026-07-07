@@ -97,12 +97,14 @@ if (file.exists(mv_ofp)) {
 mv_txt <- readLines(mv_fp)
 
 # replace placeholder values
-new_txt <- gsub("@CRAN_FLAGS@", .cran_flags, mv_txt) |>
-  gsub("@PROFILE@", .profile, x = _) |>
-  gsub("@CLEAN_TARGET@", .clean_targets, x = _) |>
-  gsub("@LIBDIR@", .libdir, x = _) |>
-  gsub("@TARGET@", .target, x = _) |>
-  gsub("@PANIC_EXPORTS@", .panic_exports, x = _)
+# (written as sequential calls rather than a `|>` placeholder chain so this
+# runs on R < 4.2, e.g. the R 4.1.x shipped in some Linux distributions)
+new_txt <- gsub("@CRAN_FLAGS@", .cran_flags, mv_txt)
+new_txt <- gsub("@PROFILE@", .profile, new_txt)
+new_txt <- gsub("@CLEAN_TARGET@", .clean_targets, new_txt)
+new_txt <- gsub("@LIBDIR@", .libdir, new_txt)
+new_txt <- gsub("@TARGET@", .target, new_txt)
+new_txt <- gsub("@PANIC_EXPORTS@", .panic_exports, new_txt)
 
 message("Writing `", mv_ofp, "`.")
 con <- file(mv_ofp, open = "wb")

@@ -43,20 +43,23 @@ install.packages("Neo4jR", repos = "https://internal.example.com/r")
 
 ### Build a binary (requires Rust)
 
-Run on the target OS, with `cargo`/`rustc` >= 1.81:
+Run on the target OS, with `cargo`/`rustc` >= 1.81. The binary is
+`Neo4jR_<version>.tgz` on macOS or `Neo4jR_<version>.zip` on Windows, and must
+be built on its target platform.
+
+From a shell — writes the binary to the current working directory:
 
 ```sh
 R CMD INSTALL --build .
 ```
 
-This produces `Neo4jR_<version>.tgz` on macOS or `Neo4jR_<version>.zip` on
-Windows. A binary must be built on its target platform.
-
-The R Windows installer does not add R to `PATH`, so `R CMD` may be unavailable
-in a shell. Building from within R avoids this:
+From within R — writes the binary to the package's parent directory by default
+and returns its path; the R Windows installer does not add R to `PATH`, so this
+avoids needing `R CMD` in a shell:
 
 ```r
-pkgbuild::build(".", binary = TRUE)
+pkgbuild::build(".", binary = TRUE)                       # -> ../Neo4jR_<version>.zip
+pkgbuild::build(".", binary = TRUE, dest_path = "binaries/windows")  # choose location
 ```
 
 On Windows, R links with the GNU (Rtools) ABI. If the Rust GNU target is not
