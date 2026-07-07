@@ -15,15 +15,19 @@ a binary or installing from source does.
 
 ### Install a binary
 
-From a binary file (`.tgz` on macOS, `.zip` on Windows):
+From a binary file (`.tgz` on macOS, `.zip` on Windows), use `repos = NULL`:
 
 ```r
-install.packages("Neo4jR_0.0.0.9000.tgz", repos = NULL)
-remotes::install_local("Neo4jR_0.0.0.9000.tgz")
-devtools::install_local("Neo4jR_0.0.0.9000.tgz")
+install.packages("Neo4jR_0.0.0.9000.zip", repos = NULL)   # Windows
+install.packages("Neo4jR_0.0.0.9000.tgz", repos = NULL)   # macOS
 ```
 
-Each installs the precompiled library without invoking cargo/rustc.
+This installs the precompiled library without invoking cargo/rustc.
+
+`devtools::install_local()` / `remotes::install_local()` are source installers:
+they unpack the archive and rebuild it (needing the toolchain) and do not
+reliably install a prebuilt binary. Use `install.packages(repos = NULL)` for
+binaries.
 
 ### Internal package repository
 
