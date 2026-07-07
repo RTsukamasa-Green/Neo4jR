@@ -7,10 +7,15 @@
 
 # --- R CMD build / check artifacts ---
 /*.tar.gz
+*.tgz
+*.zip
 /*.Rcheck/
 *.Rcheck/
 /doc/
 /Meta/
+# committed prebuilt binaries are the exception
+!binaries/**/*.tgz
+!binaries/**/*.zip
 
 # --- compiled objects (R side) ---
 *.o
