@@ -43,15 +43,21 @@ install.packages("Neo4jR", repos = "https://internal.example.com/r")
 
 ### Build a binary (requires Rust)
 
-On the target OS, with `cargo`/`rustc` >= 1.81:
+Run on the target OS, with `cargo`/`rustc` >= 1.81:
 
 ```sh
 R CMD INSTALL --build .
-# Windows: rustup target add x86_64-pc-windows-gnu
 ```
 
-Produces `Neo4jR_<version>.tgz` (macOS) or `.zip` (Windows). A binary must be
-built on its target platform.
+This produces `Neo4jR_<version>.tgz` on macOS or `Neo4jR_<version>.zip` on
+Windows. A binary must be built on its target platform.
+
+On Windows, R links with the GNU (Rtools) ABI. If the Rust GNU target is not
+already the default toolchain, install it once before building:
+
+```sh
+rustup target add x86_64-pc-windows-gnu
+```
 
 ### Build from source (requires Rust)
 
