@@ -36,8 +36,10 @@ fn bolt_connect(
         .build()
         .map_err(|e| Error::Other(format!("Invalid connection config: {e}")))?;
 
+    // neo4rs 0.9's `Graph::connect` is synchronous; run it inside the runtime
+    // so any pool/routing setup that needs a reactor has one.
     let graph = rt
-        .block_on(Graph::connect(config))
+        .block_on(async { Graph::connect(config) })
         .map_err(|e| Error::Other(format!("Neo4j connect failed: {e}")))?;
     Ok(ExternalPtr::new(Neo4jConnection { graph, rt }))
 }

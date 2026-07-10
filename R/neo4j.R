@@ -7,7 +7,8 @@
 #' @param user Username (default `"neo4j"`).
 #' @param password Password.
 #' @param database Name of the database to use for the session. Defaults to
-#'   `NULL`, which uses the server default (`"neo4j"`).
+#'   `NULL`, which leaves the database unspecified so the server routes to the
+#'   connecting user's home (default) database.
 #'
 #' @return A `neo4j_connection` object.
 #' @export
@@ -132,7 +133,7 @@ neo4j_summary <- function(x) {
 
 #' @export
 print.neo4j_connection <- function(x, ...) {
-  db <- if (is.null(x$database) || !nzchar(x$database)) "neo4j (default)" else x$database
+  db <- if (is.null(x$database) || !nzchar(x$database)) "<server home database>" else x$database
   cat("<neo4j_connection>", x$uri, "db:", db, "\n")
   invisible(x)
 }

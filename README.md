@@ -87,8 +87,10 @@ con <- neo4j_connect("neo4j://localhost:7687", user = "neo4j",
                      password = "password", database = "mydb")
 ```
 
-`database` is optional and defaults to the server default (`"neo4j"`). The
-connection is lazy: it is established on the first query, not at `neo4j_connect()`.
+`database` is optional; when omitted, the database is left unspecified and the
+server routes queries to the connecting user's home (default) database. The
+connection is lazy: it is established on the first query, not at
+`neo4j_connect()`.
 
 ## Running queries
 
@@ -179,7 +181,7 @@ R  (neo4j_connect / cypher; neo4j_connection S3 wrapper)
 │   .Call  ->  extendr-generated wrappers (R/extendr-wrappers.R)
 Rust (src/rust/src/lib.rs)
 ├─ Neo4jConnection { graph: neo4rs::Graph, rt: tokio::Runtime }   (R external pointer)
-├─ bolt_connect(): ConfigBuilder(.db) -> rt.block_on(Graph::connect(...))
+├─ bolt_connect(): ConfigBuilder (db optional; unset -> server home db) -> Graph::connect
 └─ bolt_run():     rt.block_on(execute -> collect rows)
               └─ get_value()/bolt_to_robj(): type-probe each value into
                  native R structures; returns records + keys + summary
@@ -201,8 +203,11 @@ CRAN package size limits.
 
 ## Limitations
 
-- Server-side write counters (nodes/relationships created, properties set) are
-  not exposed by `neo4rs` 0.8, so `summary` reports client-side info only.
+- Built on `neo4rs` 0.9.x, currently a release candidate (`0.8.0` is the last
+  stable release; it hardcodes the database to "neo4j", which 0.9 fixes).
+- `summary` reports client-side info only (records, columns, round-trip time).
+  neo4rs 0.9 exposes server-side counters via its `RunResult`, but they are not
+  wired into `summary` yet.
 - Temporal and spatial types (Date/Time/DateTime/Duration, Point) are returned
   as their debug text, not R date/time/spatial objects.
 - Column order follows Bolt's field order, which may differ from the `RETURN`
@@ -211,6 +216,6 @@ CRAN package size limits.
 ## Roadmap
 
 - Temporal and spatial types -> R `Date`/`POSIXct`.
-- Server-side write counters.
-- Explicit transactions and multi-database routing.
+- Surface neo4rs 0.9 `RunResult` server-side counters in `summary`.
+- Explicit transactions.
 - Connection/auth options (encryption, fetch size) via `ConfigBuilder`.
