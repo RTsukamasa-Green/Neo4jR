@@ -4,46 +4,26 @@
 
 An R package that connects to Neo4j over the Bolt protocol. It wraps the Rust
 [`neo4rs`](https://github.com/neo4j-labs/neo4rs) crate via
-[`extendr`](https://extendr.github.io/); the Rust code is compiled into the
-package, so there is no Python or external runtime dependency. TLS uses
-`rustls` (no system OpenSSL).
+[`extendr`](https://extendr.github.io/) and compiles the Rust code into the
+package.
 
 ## Installation
 
-Installing a binary package does not require the Rust toolchain; only building
+Installing a binary package does not require the Rust toolchain, however building
 a binary or installing from source does.
 
 ### Install a binary
 
 From a binary file (`.tgz` on macOS, `.zip` on Windows), use `repos = NULL`:
-
+Binaries for Windows, Linux and Mac silicon are in `binaries/1
 ```r
 install.packages("Neo4jR_0.0.0.9000.zip", repos = NULL)   # Windows
-install.packages("Neo4jR_0.0.0.9000.tgz", repos = NULL)   # macOS
+install.packages(<binary file>, repos = NULL)   # macOS
 ```
 
-This installs the precompiled library without invoking cargo/rustc.
+You can also try installing from source, but this will require the Rust toolchain.
 
-`devtools::install_local()` / `remotes::install_local()` are source installers:
-they unpack the archive and rebuild it (needing the toolchain) and do not
-reliably install a prebuilt binary. Use `install.packages(repos = NULL)` for
-binaries.
 
-### Internal package repository
-
-Place binaries in a CRAN-style directory and index it (paths use the target R
-version, e.g. 4.4):
-
-```r
-tools::write_PACKAGES("repo/bin/windows/contrib/4.4",             type = "win.binary")
-tools::write_PACKAGES("repo/bin/macosx/big-sur-arm64/contrib/4.4", type = "mac.binary")
-```
-
-Serve the directory over HTTP or a `file://` path:
-
-```r
-install.packages("Neo4jR", repos = "https://internal.example.com/r")
-```
 
 ### Build a binary (requires Rust)
 
@@ -57,9 +37,7 @@ From a shell — writes the binary to the current working directory:
 R CMD INSTALL --build .
 ```
 
-From within R — writes the binary to the package's parent directory by default
-and returns its path; the R Windows installer does not add R to `PATH`, so this
-avoids needing `R CMD` in a shell:
+
 
 ```r
 pkgbuild::build(".", binary = TRUE)                       # -> ../Neo4jR_<version>.zip
@@ -101,15 +79,11 @@ cypher(con, "RETURN 1 AS n, 'hi' AS greeting")
 ```
 
 `cypher(con, query, parameters = list(), format = "data.frame", summary = FALSE)`
-returns a `data.frame` by default: one column per returned value, one row per
-record. Scalar columns are simplified to typed atomic vectors; Neo4j lists,
-maps, nodes, relationships and paths become list-columns of structured objects.
+returns a `data.frame` by default. Scalar columns are simplified to typed atomic vectors. Neo4j lists,
+maps, nodes, relationships and paths are rendered as list-columns of structured objects.
 
 ### Parameters
 
-Values passed via `parameters` are sent as native Bolt values, so they are not
-interpolated into the query text (no Cypher injection) and the server can reuse
-the query plan.
 
 ```r
 cypher(con,
@@ -120,14 +94,7 @@ cypher(con,
 Length-1 R vectors are sent as Bolt scalars; longer vectors and nested lists
 become Bolt lists/maps.
 
-Labels and relationship types can be parameterized with Cypher
-[dynamic labels](https://neo4j.com/docs/cypher-manual/current/clauses/match/#dynamic-match)
-(`$(...)`):
 
-```r
-cypher(con, "CREATE (n:$($label) {name: $name})",
-       parameters = list(label = "Person", name = "Ada"))
-```
 
 ### Data type mapping
 
@@ -174,48 +141,3 @@ neo4j_summary(df)$elapsed_ms
 The summary is client-side (records, columns, round-trip time). Server-side
 write counters are not reported (see Limitations).
 
-## Architecture
-
-```
-R  (neo4j_connect / cypher; neo4j_connection S3 wrapper)
-│   .Call  ->  extendr-generated wrappers (R/extendr-wrappers.R)
-Rust (src/rust/src/lib.rs)
-├─ Neo4jConnection { graph: neo4rs::Graph, rt: tokio::Runtime }   (R external pointer)
-├─ bolt_connect(): ConfigBuilder (db optional; unset -> server home db) -> Graph::connect
-└─ bolt_run():     rt.block_on(execute -> collect rows)
-              └─ get_value()/bolt_to_robj(): type-probe each value into
-                 native R structures; returns records + keys + summary
-```
-
-`neo4rs` is async; each connection holds one Tokio runtime and calls
-`block_on` per query.
-
-## CRAN packaging
-
-CRAN build machines have no network access, so dependencies must be vendored:
-
-```r
-rextendr::vendor_pkgs()   # writes src/rust/vendor.tar.xz + .cargo config
-```
-
-`cargo build --offline` must then succeed. The vendored tarball counts toward
-CRAN package size limits.
-
-## Limitations
-
-- Built on `neo4rs` 0.9.x, currently a release candidate (`0.8.0` is the last
-  stable release; it hardcodes the database to "neo4j", which 0.9 fixes).
-- `summary` reports client-side info only (records, columns, round-trip time).
-  neo4rs 0.9 exposes server-side counters via its `RunResult`, but they are not
-  wired into `summary` yet.
-- Temporal and spatial types (Date/Time/DateTime/Duration, Point) are returned
-  as their debug text, not R date/time/spatial objects.
-- Column order follows Bolt's field order, which may differ from the `RETURN`
-  clause order.
-
-## Roadmap
-
-- Temporal and spatial types -> R `Date`/`POSIXct`.
-- Surface neo4rs 0.9 `RunResult` server-side counters in `summary`.
-- Explicit transactions.
-- Connection/auth options (encryption, fetch size) via `ConfigBuilder`.
